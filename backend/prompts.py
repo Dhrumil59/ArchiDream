@@ -71,13 +71,13 @@ rearrange objects.
 {facts}
 
 Style: match the visual style, colors and materials of the input image. \
-{style}
+
 
 Consistent lighting all around; no people, no lens flares, no text, no \
 watermarks, no borders. Output: one seamless 2:1 equirectangular 360 \
 panorama, straight horizon at mid-height, wrap-continuous edges.\
 """
-
+# {style}
 
 def stylize_prompt(style_id):
     return STYLIZE_TOP_DOWN.format(style=style_block(style_id))

@@ -44,6 +44,15 @@ _load_env()
 
 
 QWEN_MODEL = os.environ.get("QWEN_IMAGE_MODEL", "qwen-image-edit-plus-2025-12-15")
+# "Nano Banana 2 Lite" = Gemini 3.1 Flash Lite Image. Override the exact id
+# with NANO2_MODEL in .env if the model string differs (e.g. a -preview suffix).
+NANO2_MODEL = os.environ.get("NANO2_MODEL", "gemini-3.1-flash-lite-image")
+
+# dropdown model id -> underlying Gemini image model id
+GEMINI_MODELS = {
+    "nano-banana": NANO_MODEL,
+    "nano-banana-2-lite": NANO2_MODEL,
+}
 
 
 def _client():
@@ -69,15 +78,16 @@ def _qwen_ready():
 
 # the dropdown: model id -> metadata + availability
 def models():
+    gem = _client() is not None
     return [
-        {"id": "nano-banana", "name": "Nano Banana (Gemini)",
-         "available": _client() is not None},
-        {"id": "qwen", "name": f"Qwen Image Edit",
-         "available": _qwen_ready()},
+        {"id": "nano-banana", "name": "Nano Banana (Gemini)", "available": gem},
+        {"id": "nano-banana-2-lite", "name": "Nano Banana 2 Lite",
+         "available": gem},
+        {"id": "qwen", "name": "Qwen Image Edit", "available": _qwen_ready()},
     ]
 
 
-MODEL_IDS = ("nano-banana", "qwen")
+MODEL_IDS = ("nano-banana", "nano-banana-2-lite", "qwen")
 
 
 def provider_name(model="nano-banana"):
@@ -85,18 +95,19 @@ def provider_name(model="nano-banana"):
     return model if ok else "mock"
 
 
-def _generate(prompt, image, aspect_ratio=None):
+def _generate(prompt, image, aspect_ratio=None, model=None):
     """One image-edit call. Returns a PIL Image or raises."""
     from google.genai import types
     client = _client()
-    config = types.GenerateContentConfig(response_modalities=["IMAGE"])
+    config = types.GenerateContentConfig(response_modalities=["IMAGE"],
+                                         temperature=0)  # near-deterministic
     if aspect_ratio:
         try:
             config.image_config = types.ImageConfig(aspect_ratio=aspect_ratio)
         except Exception:
             pass  # older SDKs: let the model pick, we resize afterwards
     resp = client.models.generate_content(
-        model=NANO_MODEL, contents=[prompt, image], config=config)
+        model=model or NANO_MODEL, contents=[prompt, image], config=config)
     for cand in resp.candidates or []:
         for part in cand.content.parts or []:
             data = getattr(part, "inline_data", None)
@@ -128,7 +139,7 @@ def _qwen_generate(prompt, image, size=None):
                 api_key=os.environ["DASHSCOPE_API_KEY"], model=QWEN_MODEL,
                 messages=[{"role": "user", "content": content}],
                 result_format="message", stream=False,
-                watermark=False, negative_prompt="")
+                watermark=False, negative_prompt="", temperature=0)
             if with_size and size:
                 kwargs["size"] = size
             return MultiModalConversation.call(**kwargs)
@@ -286,10 +297,10 @@ def stylize_top_down(plan_img, prompt, style_id, model="nano-banana"):
             return out.resize(plan_img.size, Image.LANCZOS), "qwen"
         except Exception as exc:
             print(f"  ! qwen stylize failed, using mock: {exc}")
-    elif model == "nano-banana" and _client():
+    elif model in GEMINI_MODELS and _client():
         try:
-            out = _generate(prompt, plan_img)
-            return out.resize(plan_img.size, Image.LANCZOS), "nano-banana"
+            out = _generate(prompt, plan_img, model=GEMINI_MODELS[model])
+            return out.resize(plan_img.size, Image.LANCZOS), model
         except Exception as exc:
             print(f"  ! gemini stylize failed, using mock: {exc}")
     return _mock_stylize(plan_img, style_id), "mock"
@@ -305,10 +316,11 @@ def room_pano(crop_img, prompt, style_id, model="nano-banana"):
             return out.resize((PANO_W, PANO_H), Image.LANCZOS), "qwen"
         except Exception as exc:
             print(f"  ! qwen pano failed, using mock: {exc}")
-    elif model == "nano-banana" and _client():
+    elif model in GEMINI_MODELS and _client():
         try:
-            out = _generate(prompt, crop_img, aspect_ratio="16:9")
-            return out.resize((PANO_W, PANO_H), Image.LANCZOS), "nano-banana"
+            out = _generate(prompt, crop_img, aspect_ratio="16:9",
+                            model=GEMINI_MODELS[model])
+            return out.resize((PANO_W, PANO_H), Image.LANCZOS), model
         except Exception as exc:
             print(f"  ! gemini pano failed, using mock: {exc}")
     return _mock_pano(crop_img, style_id), "mock"
