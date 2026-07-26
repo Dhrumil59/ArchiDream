@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ArchiDream — Project Submission</title>
+<title>ArchiDream - Project Submission</title>
 <meta name="description" content="Blueprint → dream home. Upload a CAD floor plan and get a styled top-down, step-inside 360° rooms, and an AI-directed tour film. AI Builders Challenge · July · Creative Industries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>">
-<meta property="og:title" content="ArchiDream — Blueprint → dream home">
+<meta property="og:title" content="ArchiDream - Blueprint → dream home">
 <meta property="og:description" content="DXF floor plan → styled top-down, 360° rooms, and an AI-directed tour film. Built with IBM Bob for the July Creative Industries challenge.">
 <meta property="og:type" content="website">
 <style>
-  /* ArchiDream — project submission sheet.
+  /* ArchiDream - project submission sheet.
      Deliberate single dark theme: a blueprint is dark by nature. */
   :root{
-    --ink:#0b0e13;      /* cool blue-black — blueprint ground   */
+    --ink:#0b0e13;      /* cool blue-black - blueprint ground   */
     --slate:#141a24;    /* raised panel                          */
     --slate2:#0f141d;
     --line:#233042;     /* structural hairlines                  */
@@ -130,7 +130,7 @@
   .lede{color:var(--fog);font-size:clamp(15px,1.6vw,17.5px);max-width:52ch;}
   .lede b{color:var(--ivory);font-weight:600;}
 
-  /* hero before/after slider — real project assets */
+  /* hero before/after slider - real project assets */
   @property --pos{syntax:"<percentage>";inherits:true;initial-value:52%;}
   .ba{
     position:relative;width:100%;aspect-ratio:1600/958;--pos:52%;
@@ -296,7 +296,7 @@
   <header class="top frame">
     <div class="wm"><b>Archi<span class="star">◆</span>Dream</b></div>
     <div class="stamp">
-      <div><span class="k">Challenge /</span> <span class="v">AI Builders — July</span></div>
+      <div><span class="k">Challenge /</span> <span class="v">AI Builders - July</span></div>
       <div><span class="k">Theme /</span> <span class="v">Creative Industries</span></div>
     </div>
   </header>
@@ -307,7 +307,7 @@
       <div class="eyebrow tag"><span class="n">◆</span> Project Submission · Reimagine Creative Industries with AI</div>
       <h1>Blueprint <span class="arrow">→</span><br><span class="grad">dream home.</span></h1>
       <p class="lede">Upload a CAD floor plan. Minutes later: a photoreal styled top-down with
-      clickable rooms, step-inside <b>360° panoramas</b>, and an <b>AI-directed tour film</b> —
+      clickable rooms, step-inside <b>360° panoramas</b>, and an <b>AI-directed tour film</b> -
       every pixel locked to the drawing's <b>real geometry</b>.</p>
     </div>
 
@@ -333,11 +333,14 @@
   <!-- ===================== PROBLEM ===================== -->
   <section class="frame" style="margin-top:22px">
     <div class="dim"><span class="lab"><span class="n">01</span> · The Problem</span></div>
-    <div class="sechead"><h2>A blueprint is precise. It's also emotionally dead.</h2></div>
-    <p class="note">Architects, realtors, and buyers can't <em>feel</em> a home from line-work.
-    <span>Turning a drawing into something sellable — styled interiors, a walkthrough, a marketing
-    clip — has meant hiring a 3D artist, days of modeling, and real budget. That gap is where most
-    floor plans stall.</span></p>
+    <div class="sechead"><h2>Marketing an unbuilt home sits on the critical path, and it is slow.</h2></div>
+    <p class="note">A developer cannot get construction finance until roughly <em>70% of units are
+    pre-sold</em>, and cannot pre-sell an apartment that does not exist yet without CGI, so the
+    marketing visuals gate the whole project. <span>Yet producing them, a studio modeling the building
+    and rendering photoreal interiors, exteriors and a flythrough, takes weeks to months, with another
+    round for every restyle. A 90-day delay adds roughly $1.1M in interest carry on a mid-sized project,
+    and only 25% of developments hit their deadline (KPMG). Speed to market is not a nicety; it is
+    margin.</span></p>
   </section>
 
   <!-- ===================== SOLUTION ===================== -->
@@ -351,14 +354,14 @@
         <span class="kind">Output</span>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="1"></rect><path d="M3 10h18M12 10v11"></path><circle cx="7.5" cy="6.5" r="1"></circle></svg>
         <h3>Styled top-down</h3>
-        <p>A photoreal, furnished overhead in four interior styles — with clickable rooms placed
+        <p>A photoreal, furnished overhead in four interior styles - with clickable rooms placed
         pixel-perfect from the real geometry, not guessed from the image.</p>
       </div>
       <div class="card">
         <span class="kind">Output</span>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
         <h3>Step-inside 360°</h3>
-        <p>Click any room and enter an equirectangular panorama — generated on demand and grounded
+        <p>Click any room and enter an equirectangular panorama - generated on demand and grounded
         in that room's actual dimensions, doors, and windows.</p>
       </div>
       <div class="card">
@@ -372,7 +375,7 @@
         <span class="kind">Feature</span>
         <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><polygon points="11 3 3 9 3 21 21 21 21 9 13 3"></polygon><polyline points="9 21 9 12 15 12 15 21"></polyline></svg>
         <h3>Polygon region edit</h3>
-        <p>Draw a freehand polygon over any part of a 360° panorama, describe the change — Qwen
+        <p>Draw a freehand polygon over any part of a 360° panorama, describe the change - Qwen
         inpaints only that region. The rest of the image stays untouched.</p>
       </div>
     </div>
@@ -386,7 +389,7 @@
     <div class="flow">
       <div class="step">
         <span class="num">01</span><h3>Extract</h3>
-        <p>A deterministic engine parses the DXF into a semantic model — rooms, walls, openings, in
+        <p>A deterministic engine parses the DXF into a semantic model - rooms, walls, openings, in
         real meters. No AI touches the measurements.</p>
         <span class="via">ezdxf · matplotlib</span>
       </div>
@@ -398,7 +401,7 @@
       </div>
       <div class="step">
         <span class="num">03</span><h3>Dress</h3>
-        <p>Image AI stylizes the plan and paints each 360 — camera-locked and fact-grounded, so it
+        <p>Image AI stylizes the plan and paints each 360 - camera-locked and fact-grounded, so it
         decorates without inventing architecture.</p>
         <span class="via">Gemini 3 Pro Image · Qwen</span>
       </div>
@@ -413,7 +416,7 @@
       <span class="num" style="font-family:var(--font-mono);font-size:12px;color:var(--gold);letter-spacing:.15em;">+</span>
       <span style="font-family:var(--font-body);font-weight:600;color:var(--ivory);margin-left:12px;">Polygon region edit</span>
       <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--blue);margin-left:10px;">Qwen wanx2.1-imageedit</span>
-      <p style="font-size:13px;color:var(--fog);margin:8px 0 0;max-width:none;">In edit mode, the pano renders flat. The user draws a closed polygon, types a prompt, and Qwen inpaints that exact masked region — crop → edit → feathered paste back → sphere reloads.</p>
+      <p style="font-size:13px;color:var(--fog);margin:8px 0 0;max-width:none;">In edit mode, the pano renders flat. The user draws a closed polygon, types a prompt, and Qwen inpaints that exact masked region - crop → edit → feathered paste back → sphere reloads.</p>
     </div>
   </section>
 
@@ -422,15 +425,15 @@
     <div class="dim"><span class="lab"><span class="n">04</span> · How IBM Bob Was Used</span></div>
     <div class="bob">
       <div class="say">
-        <p class="lead"><b>IBM Bob was the primary development tool</b> — the AI dev assistant that
+        <p class="lead"><b>IBM Bob was the primary development tool</b> - the AI dev assistant that
         built ArchiDream through spec-driven development.</p>
         <p><small>The workflow mirrors the product itself: plan deliberately, then let deterministic
-        code execute — AI as a partner throughout, not a black-box generator.</small></p>
+        code execute - AI as a partner throughout, not a black-box generator.</small></p>
       </div>
       <div class="modes">
         <div class="mode"><span class="m">Ask</span><p>Explore an unfamiliar CAD/DXF codebase and its data model before extending it.</p></div>
-        <div class="mode"><span class="m">Plan</span><p>Generate an implementation plan per feature — the hotspot transform, the fact-grounded prompts, the video pipeline — reviewed and refined first.</p></div>
-        <div class="mode"><span class="m">Code</span><p>Build feature by feature across backend, UI, and prompts — with tight "check for bugs" review-and-fix loops after each phase.</p></div>
+        <div class="mode"><span class="m">Plan</span><p>Generate an implementation plan per feature - the hotspot transform, the fact-grounded prompts, the video pipeline - reviewed and refined first.</p></div>
+        <div class="mode"><span class="m">Code</span><p>Build feature by feature across backend, UI, and prompts - with tight "check for bugs" review-and-fix loops after each phase.</p></div>
       </div>
     </div>
   </section>
@@ -439,7 +442,7 @@
   <section class="frame fit" style="margin-top:22px">
     <div class="dim"><span class="lab"><span class="n">05</span> · Challenge Fit</span></div>
     <div class="sechead"><h2>July · Reimagine Creative Industries with AI</h2></div>
-    <p class="big">AI as a creative <em>partner</em>, not just a generator — closing the gap between
+    <p class="big">AI as a creative <em>partner</em>, not just a generator - closing the gap between
     <em>imagination and execution.</em></p>
     <div class="pills">
       <span class="pill">AI-powered design tools</span>
@@ -464,10 +467,10 @@
     </div>
     <div class="dim" style="margin-bottom:26px"><span class="lab">Review the Build</span></div>
     <div class="cta">
-      <a class="btn primary" href="#" target="_blank" rel="noopener">▶ Watch the 3-min demo</a>
+      <a class="btn primary" href="REPLACE_WITH_YOUTUBE_LINK" target="_blank" rel="noopener">▶ Watch the 3-min demo</a>
       <a class="btn ghost" href="https://github.com/Dhrumil59/ArchiDream" target="_blank" rel="noopener">◆ GitHub repository</a>
     </div>
-    <p class="todo">↳ One link left to fill — swap the demo-video URL once your ≤3-min video is uploaded.</p>
+    <p class="todo">↳ One link left to fill - swap the demo-video URL once your ≤3-min video is uploaded.</p>
   </section>
 
   <!-- ===================== TITLE BLOCK ===================== -->
