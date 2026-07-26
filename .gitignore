@@ -1,0 +1,36 @@
+﻿# ---- secrets (NEVER commit real keys) ----
+.env
+.env.*
+!.env.example
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.egg-info/
+
+# ---- node / next ----
+node_modules/
+.next/
+npm-debug.log*
+yarn-error.log*
+
+# ---- generated data: exclude intermediates / dupes, keep real outputs ----
+# (data/ is NOT globally ignored — plan.png, panos, stylized, tours are committed)
+**/source.dxf
+**/crops/
+**/model.json
+**/*.mock.png
+backend/engine/output/
+
+# ---- tour video build artifacts (source is compile_tour.py + tour-template.tpl) ----
+tour/property-tour/index.html
+tour/property-tour/tour-data.json
+tour/property-tour/meta.json
+tour/property-tour/media/
+
+# ---- os / editor ----
+.DS_Store
+Thumbs.db
+.vscode/

@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ArchiDream — Project Submission</title>
+<meta name="description" content="Blueprint → dream home. Upload a CAD floor plan and get a styled top-down, step-inside 360° rooms, and an AI-directed tour film. AI Builders Challenge · July · Creative Industries.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>">
+<meta property="og:title" content="ArchiDream — Blueprint → dream home">
+<meta property="og:description" content="DXF floor plan → styled top-down, 360° rooms, and an AI-directed tour film. Built with IBM Bob for the July Creative Industries challenge.">
+<meta property="og:type" content="website">
+<style>
+  /* ArchiDream — project submission sheet.
+     Deliberate single dark theme: a blueprint is dark by nature. */
+  :root{
+    --ink:#0b0e13;      /* cool blue-black — blueprint ground   */
+    --slate:#141a24;    /* raised panel                          */
+    --slate2:#0f141d;
+    --line:#233042;     /* structural hairlines                  */
+    --blue:#5f8fb3;     /* desaturated drafting line (technical) */
+    --blue-dim:#3d566d;
+    --gold:#c9a35c;     /* brand accent (the "dream")            */
+    --gold-soft:#e6c98a;
+    --ivory:#ece4d5;    /* warm primary text                     */
+    --fog:#7f8a99;      /* cool secondary text                   */
+    --fog-dim:#56606f;
+
+    --font-display:"Palatino Linotype","Book Antiqua",Palatino,"Iowan Old Style",Georgia,serif;
+    --font-body:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --font-mono:ui-monospace,"SF Mono","Cascadia Code",Consolas,"Roboto Mono",monospace;
+
+    --maxw:1080px;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+
+  *{box-sizing:border-box}
+  :root,html,body{background:var(--ink);}
+  body{
+    margin:0;color:var(--ivory);
+    font-family:var(--font-body);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    /* subtle drafting grid */
+    background-image:
+      linear-gradient(var(--line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--line) 1px,transparent 1px);
+    background-size:52px 52px,52px 52px;
+    background-position:center top;
+    background-attachment:fixed;
+    background-color:var(--ink);
+  }
+  body::before{
+    /* fade the grid toward the edges so it reads as texture, not a table */
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(120% 80% at 50% 0%,transparent 30%,var(--ink) 78%);
+  }
+
+  .sheet{
+    position:relative;z-index:1;
+    max-width:var(--maxw);margin:0 auto;
+    padding:clamp(18px,3vw,40px);
+  }
+  .frame{
+    border:1px solid var(--line);
+    border-radius:2px;
+    background:linear-gradient(180deg,rgba(20,26,36,.55),rgba(11,14,19,.55));
+    backdrop-filter:blur(2px);
+  }
+
+  /* ---- shared drafting devices ---- */
+  .tag{
+    font-family:var(--font-mono);
+    font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--blue);
+  }
+  .tag .n{color:var(--gold);}
+  .dim{ /* dimension-line section divider */
+    display:flex;align-items:center;gap:14px;
+    margin:0;padding:0;
+  }
+  .dim::before,.dim::after{
+    content:"";height:1px;background:linear-gradient(90deg,transparent,var(--blue-dim),transparent);flex:1;
+  }
+  .dim .lab{
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--fog);white-space:nowrap;
+  }
+  .dim .lab .n{color:var(--gold);}
+
+  h1,h2,h3{font-family:var(--font-display);font-weight:600;text-wrap:balance;margin:0;}
+  p{max-width:66ch;}
+  a{color:var(--gold-soft);}
+
+  /* ============ HEADER / TITLE BLOCK ============ */
+  header.top{
+    display:flex;justify-content:space-between;align-items:center;
+    flex-wrap:wrap;gap:14px;
+    padding:14px 20px;margin-bottom:22px;
+  }
+  .wm{font-family:var(--font-display);font-size:22px;letter-spacing:.01em;}
+  .wm b{font-weight:600;color:var(--ivory);}
+  .wm .star{color:var(--gold);}
+  .stamp{
+    font-family:var(--font-mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--fog);text-align:right;line-height:1.9;
+  }
+  .stamp .k{color:var(--fog-dim);}
+  .stamp .v{color:var(--blue);}
+
+  /* ============ HERO ============ */
+  .hero{
+    padding:clamp(26px,4vw,54px) clamp(20px,4vw,54px) clamp(20px,3vw,40px);
+    display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(28px,4vw,52px);
+    align-items:center;
+  }
+  @media(max-width:820px){.hero{grid-template-columns:1fr;}}
+
+  .hero .eyebrow{margin-bottom:22px;}
+  .hero h1{
+    font-size:clamp(38px,6vw,72px);line-height:1.06;letter-spacing:-.02em;
+    margin:0 0 22px;
+  }
+  .hero h1 .arrow{color:var(--gold);font-style:italic;}
+  .hero h1 .grad{
+    display:inline-block;padding-bottom:.06em;
+    color:transparent;-webkit-text-fill-color:transparent;
+    background:linear-gradient(100deg,var(--gold-soft),var(--gold));
+    -webkit-background-clip:text;background-clip:text;
+  }
+  .lede{color:var(--fog);font-size:clamp(15px,1.6vw,17.5px);max-width:52ch;}
+  .lede b{color:var(--ivory);font-weight:600;}
+
+  /* hero before/after slider — real project assets */
+  @property --pos{syntax:"<percentage>";inherits:true;initial-value:52%;}
+  .ba{
+    position:relative;width:100%;aspect-ratio:1600/958;--pos:52%;
+    border:1px solid var(--line);border-radius:3px;overflow:hidden;
+    background:var(--slate2);touch-action:none;user-select:none;cursor:ew-resize;
+    animation:sweep 1.7s var(--ease) .35s both;
+  }
+  .ba:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+  .ba img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    display:block;pointer-events:none;-webkit-user-drag:none;}
+  .ba-before{position:absolute;inset:0;overflow:hidden;
+    clip-path:inset(0 calc(100% - var(--pos)) 0 0);}
+  .ba-markers{position:absolute;inset:0;pointer-events:none;}
+  .m360{position:absolute;transform:translate(-50%,-50%);
+    width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+    background:rgba(11,14,19,.62);border:1px solid var(--gold);color:var(--gold-soft);
+    box-shadow:0 2px 10px rgba(0,0,0,.45);backdrop-filter:blur(2px);
+    animation:pulse 3.2s var(--ease) infinite;}
+  .m360 svg{width:15px;height:15px;}
+  .m360::after{content:"";position:absolute;inset:-5px;border-radius:50%;
+    border:1px solid var(--gold);opacity:.3;}
+  .ba-handle{position:absolute;top:0;bottom:0;left:var(--pos);width:2px;
+    background:linear-gradient(180deg,transparent 8%,var(--gold),transparent 92%);
+    transform:translateX(-1px);pointer-events:none;}
+  .ba-grip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:34px;height:34px;border-radius:50%;background:var(--gold);color:#181203;
+    display:grid;place-items:center;box-shadow:0 3px 14px rgba(0,0,0,.55);}
+  .ba-tag{position:absolute;bottom:10px;font-family:var(--font-mono);font-size:10px;
+    letter-spacing:.24em;text-transform:uppercase;pointer-events:none;
+    text-shadow:0 1px 5px rgba(0,0,0,.8);}
+  .ba-tag.left{left:12px;color:var(--blue);}
+  .ba-tag.right{right:12px;color:var(--gold-soft);}
+  @keyframes sweep{from{--pos:88%}to{--pos:52%}}
+  @keyframes pulse{
+    0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 0 rgba(201,163,92,0);}
+    50%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 5px rgba(201,163,92,.14);}
+  }
+
+  /* ============ generic section ============ */
+  section{padding:clamp(30px,4.5vw,60px) clamp(20px,4vw,54px);}
+  .sechead{margin:18px 0 30px;}
+  .sechead h2{font-size:clamp(26px,3.4vw,40px);letter-spacing:-.01em;line-height:1.05;margin-top:12px;}
+  .sechead .tag{display:block;margin-bottom:2px;}
+
+  /* problem */
+  .note{
+    border-left:2px solid var(--gold);padding:4px 0 4px 22px;
+    font-family:var(--font-display);font-size:clamp(19px,2.3vw,26px);
+    line-height:1.5;color:var(--ivory);max-width:70ch;
+  }
+  .note em{color:var(--gold-soft);font-style:italic;}
+  .note span{color:var(--fog);}
+
+  /* solution cards */
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+  @media(max-width:820px){.cards{grid-template-columns:1fr;}}
+  .card{
+    background:var(--slate2);border:1px solid var(--line);border-radius:3px;
+    padding:24px 22px 26px;position:relative;overflow:hidden;
+    transition:border-color .3s var(--ease),transform .3s var(--ease);
+  }
+  .card:hover{border-color:var(--blue-dim);transform:translateY(-3px);}
+  .card .ico{width:34px;height:34px;margin-bottom:16px;color:var(--gold);}
+  .card h3{font-size:20px;margin-bottom:9px;color:var(--ivory);}
+  .card p{font-size:14px;color:var(--fog);max-width:none;margin:0;}
+  .card .kind{font-family:var(--font-mono);font-size:10px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--blue);position:absolute;top:18px;right:18px;}
+
+  /* thesis + pipeline */
+  .thesis{
+    text-align:center;font-family:var(--font-display);
+    font-size:clamp(24px,3.6vw,40px);line-height:1.28;letter-spacing:-.01em;
+    max-width:22ch;margin:0 auto 42px;text-wrap:balance;
+  }
+  .thesis .a{color:var(--blue);}
+  .thesis .b{color:var(--gold);font-style:italic;}
+  .thesis small{display:block;font-family:var(--font-mono);font-size:12px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--fog-dim);
+    margin-top:20px;font-style:normal;}
+
+  .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+    background:var(--line);border:1px solid var(--line);border-radius:3px;overflow:hidden;}
+  @media(max-width:820px){.flow{grid-template-columns:1fr 1fr;}}
+  @media(max-width:520px){.flow{grid-template-columns:1fr;}}
+  .step{background:var(--slate2);padding:22px 20px 24px;}
+  .step .num{font-family:var(--font-mono);font-size:12px;color:var(--gold);letter-spacing:.15em;}
+  .step h3{font-size:17px;margin:12px 0 8px;color:var(--ivory);
+    font-family:var(--font-body);font-weight:600;}
+  .step p{font-size:13px;color:var(--fog);max-width:none;margin:0;}
+  .step .via{display:block;margin-top:10px;font-family:var(--font-mono);font-size:10.5px;
+    letter-spacing:.1em;color:var(--blue);}
+
+  /* bob */
+  .bob{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(24px,4vw,48px);align-items:start;}
+  @media(max-width:820px){.bob{grid-template-columns:1fr;}}
+  .modes{display:flex;flex-direction:column;gap:1px;background:var(--line);
+    border:1px solid var(--line);border-radius:3px;overflow:hidden;}
+  .mode{background:var(--slate2);padding:18px 20px;display:grid;
+    grid-template-columns:auto 1fr;gap:16px;align-items:baseline;}
+  .mode .m{font-family:var(--font-mono);font-size:12px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--gold);white-space:nowrap;}
+  .mode p{margin:0;font-size:14px;color:var(--fog);max-width:none;}
+  .bob .say p{color:var(--ivory);}
+  .bob .say .lead{font-family:var(--font-display);font-size:clamp(20px,2.6vw,27px);
+    line-height:1.45;margin-bottom:16px;}
+  .bob .say .lead b{color:var(--gold-soft);font-weight:600;}
+  .bob .say small{color:var(--fog);font-size:14px;font-family:var(--font-body);}
+
+  /* fit */
+  .fit p.big{font-family:var(--font-display);font-size:clamp(21px,2.7vw,30px);
+    line-height:1.45;color:var(--ivory);max-width:24ch;margin-bottom:26px;}
+  .fit p.big em{color:var(--gold-soft);font-style:italic;}
+  .pills{display:flex;flex-wrap:wrap;gap:10px;}
+  .pill{font-family:var(--font-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--blue);border:1px solid var(--line);border-radius:100px;padding:8px 16px;
+    background:var(--slate2);}
+
+  /* stack row */
+  .stack{display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center;
+    font-family:var(--font-mono);font-size:12.5px;letter-spacing:.08em;color:var(--fog);}
+  .stack b{color:var(--ivory);font-weight:600;}
+  .stack .sep{color:var(--fog-dim);}
+
+  /* CTA */
+  .cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;}
+  .btn{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    padding:15px 26px;border-radius:3px;text-decoration:none;display:inline-flex;gap:10px;align-items:center;
+    transition:all .25s var(--ease);
+  }
+  .btn.primary{background:var(--gold);color:#181203;font-weight:600;border:1px solid var(--gold);}
+  .btn.primary:hover{background:var(--gold-soft);}
+  .btn.ghost{background:transparent;color:var(--ivory);border:1px solid var(--blue-dim);}
+  .btn.ghost:hover{border-color:var(--gold);color:var(--gold-soft);}
+  .btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:3px;}
+  .todo{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.1em;color:var(--fog-dim);
+    text-transform:uppercase;margin-top:14px;}
+
+  /* ============ TITLE-BLOCK FOOTER ============ */
+  footer{margin-top:22px;}
+  .titleblock{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    border:1px solid var(--line);border-radius:3px;overflow:hidden;
+    background:var(--line);gap:1px;
+  }
+  @media(max-width:640px){.titleblock{grid-template-columns:1fr 1fr;}}
+  .tb{background:var(--slate2);padding:15px 18px;}
+  .tb .k{font-family:var(--font-mono);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--fog-dim);}
+  .tb .v{font-family:var(--font-display);font-size:16px;color:var(--ivory);margin-top:5px;}
+  .tb .v.gold{color:var(--gold-soft);}
+  .foot-note{text-align:center;font-family:var(--font-mono);font-size:10.5px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--fog-dim);padding:22px 0 6px;}
+
+  @media(prefers-reduced-motion:reduce){
+    .ba{animation:none;}
+    .m360{animation:none;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="top frame">
+    <div class="wm"><b>Archi<span class="star">◆</span>Dream</b></div>
+    <div class="stamp">
+      <div><span class="k">Challenge /</span> <span class="v">AI Builders — July</span></div>
+      <div><span class="k">Theme /</span> <span class="v">Creative Industries</span></div>
+    </div>
+  </header>
+
+  <!-- ===================== HERO ===================== -->
+  <div class="hero frame">
+    <div>
+      <div class="eyebrow tag"><span class="n">◆</span> Project Submission · Reimagine Creative Industries with AI</div>
+      <h1>Blueprint <span class="arrow">→</span><br><span class="grad">dream home.</span></h1>
+      <p class="lede">Upload a CAD floor plan. Minutes later: a photoreal styled top-down with
+      clickable rooms, step-inside <b>360° panoramas</b>, and an <b>AI-directed tour film</b> —
+      every pixel locked to the drawing's <b>real geometry</b>.</p>
+    </div>
+
+    <div class="ba" id="ba" tabindex="0" role="slider"
+         aria-label="Slide to compare the blueprint floor plan with the styled render"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="52">
+      <img src="assets/hero-dream.jpg" alt="Japandi-styled top-down render of the floor plan">
+      <div class="ba-markers" aria-hidden="true">
+        <span class="m360" style="left:13.0%;top:53.2%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+        <span class="m360" style="left:29.8%;top:49.9%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+        <span class="m360" style="left:48.1%;top:22.1%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+        <span class="m360" style="left:70.7%;top:22.6%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+        <span class="m360" style="left:55.3%;top:76.1%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+        <span class="m360" style="left:75.9%;top:47.7%" title="View this room in 360°"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 12a9 9 0 1 1-2.6-6.3"></path><path d="M21 3.5V8h-4.5"></path></svg></span>
+      </div>
+      <div class="ba-before"><img src="assets/hero-plan.png" alt="Blueprint floor plan"></div>
+      <div class="ba-handle"><span class="ba-grip"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 7l-4 5 4 5M15 7l4 5-4 5"></path></svg></span></div>
+      <span class="ba-tag left">Blueprint</span>
+      <span class="ba-tag right">Dream</span>
+    </div>
+  </div>
+
+  <!-- ===================== PROBLEM ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab"><span class="n">01</span> · The Problem</span></div>
+    <div class="sechead"><h2>A blueprint is precise. It's also emotionally dead.</h2></div>
+    <p class="note">Architects, realtors, and buyers can't <em>feel</em> a home from line-work.
+    <span>Turning a drawing into something sellable — styled interiors, a walkthrough, a marketing
+    clip — has meant hiring a 3D artist, days of modeling, and real budget. That gap is where most
+    floor plans stall.</span></p>
+  </section>
+
+  <!-- ===================== SOLUTION ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab"><span class="n">02</span> · The Solution</span></div>
+    <div class="sechead">
+      <h2>One DXF in. Four ways to sell the space out.</h2>
+    </div>
+    <div class="cards" style="grid-template-columns:repeat(2,1fr)">
+      <div class="card">
+        <span class="kind">Output</span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="1"></rect><path d="M3 10h18M12 10v11"></path><circle cx="7.5" cy="6.5" r="1"></circle></svg>
+        <h3>Styled top-down</h3>
+        <p>A photoreal, furnished overhead in four interior styles — with clickable rooms placed
+        pixel-perfect from the real geometry, not guessed from the image.</p>
+      </div>
+      <div class="card">
+        <span class="kind">Output</span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"></path></svg>
+        <h3>Step-inside 360°</h3>
+        <p>Click any room and enter an equirectangular panorama — generated on demand and grounded
+        in that room's actual dimensions, doors, and windows.</p>
+      </div>
+      <div class="card">
+        <span class="kind">Output</span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="5" width="18" height="14" rx="1.5"></rect><path d="M10 9l5 3-5 3z" fill="currentColor" stroke="none"></path></svg>
+        <h3>AI-directed tour film</h3>
+        <p>One button: IBM Granite <code style="font-size:11px;color:var(--blue)">granite-4-h-small</code> plans the shots, deterministic code renders a shareable marketing
+        video from the plan and the room 360s.</p>
+      </div>
+      <div class="card">
+        <span class="kind">Feature</span>
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><polygon points="11 3 3 9 3 21 21 21 21 9 13 3"></polygon><polyline points="9 21 9 12 15 12 15 21"></polyline></svg>
+        <h3>Polygon region edit</h3>
+        <p>Draw a freehand polygon over any part of a 360° panorama, describe the change — Qwen
+        inpaints only that region. The rest of the image stays untouched.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== ARCHITECTURE ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab"><span class="n">03</span> · AI Approach &amp; Architecture</span></div>
+    <p class="thesis"><span class="a">Geometry is ground truth.</span><br>AI is the <span class="b">creative skin.</span>
+      <small>The LLM decides · deterministic code executes</small></p>
+    <div class="flow">
+      <div class="step">
+        <span class="num">01</span><h3>Extract</h3>
+        <p>A deterministic engine parses the DXF into a semantic model — rooms, walls, openings, in
+        real meters. No AI touches the measurements.</p>
+        <span class="via">ezdxf · matplotlib</span>
+      </div>
+      <div class="step">
+        <span class="num">02</span><h3>Anchor</h3>
+        <p>Render to an exact meters→pixel plan, giving pixel-perfect clickable room hotspots over
+        whatever gets generated on top.</p>
+        <span class="via">SVG polygons</span>
+      </div>
+      <div class="step">
+        <span class="num">03</span><h3>Dress</h3>
+        <p>Image AI stylizes the plan and paints each 360 — camera-locked and fact-grounded, so it
+        decorates without inventing architecture.</p>
+        <span class="via">Gemini 3 Pro Image · Qwen</span>
+      </div>
+      <div class="step">
+        <span class="num">04</span><h3>Direct</h3>
+        <p>A single IBM Granite call returns a shot-plan; a deterministic compiler renders the
+        tour film frame-accurately.</p>
+        <span class="via">IBM Granite 4-h-small (watsonx) · HyperFrames</span>
+      </div>
+    </div>
+    <div style="margin-top:18px;padding:18px 20px;background:var(--slate2);border:1px solid var(--line);border-radius:3px;">
+      <span class="num" style="font-family:var(--font-mono);font-size:12px;color:var(--gold);letter-spacing:.15em;">+</span>
+      <span style="font-family:var(--font-body);font-weight:600;color:var(--ivory);margin-left:12px;">Polygon region edit</span>
+      <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--blue);margin-left:10px;">Qwen wanx2.1-imageedit</span>
+      <p style="font-size:13px;color:var(--fog);margin:8px 0 0;max-width:none;">In edit mode, the pano renders flat. The user draws a closed polygon, types a prompt, and Qwen inpaints that exact masked region — crop → edit → feathered paste back → sphere reloads.</p>
+    </div>
+  </section>
+
+  <!-- ===================== IBM BOB ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab"><span class="n">04</span> · How IBM Bob Was Used</span></div>
+    <div class="bob">
+      <div class="say">
+        <p class="lead"><b>IBM Bob was the primary development tool</b> — the AI dev assistant that
+        built ArchiDream through spec-driven development.</p>
+        <p><small>The workflow mirrors the product itself: plan deliberately, then let deterministic
+        code execute — AI as a partner throughout, not a black-box generator.</small></p>
+      </div>
+      <div class="modes">
+        <div class="mode"><span class="m">Ask</span><p>Explore an unfamiliar CAD/DXF codebase and its data model before extending it.</p></div>
+        <div class="mode"><span class="m">Plan</span><p>Generate an implementation plan per feature — the hotspot transform, the fact-grounded prompts, the video pipeline — reviewed and refined first.</p></div>
+        <div class="mode"><span class="m">Code</span><p>Build feature by feature across backend, UI, and prompts — with tight "check for bugs" review-and-fix loops after each phase.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CHALLENGE FIT ===================== -->
+  <section class="frame fit" style="margin-top:22px">
+    <div class="dim"><span class="lab"><span class="n">05</span> · Challenge Fit</span></div>
+    <div class="sechead"><h2>July · Reimagine Creative Industries with AI</h2></div>
+    <p class="big">AI as a creative <em>partner</em>, not just a generator — closing the gap between
+    <em>imagination and execution.</em></p>
+    <div class="pills">
+      <span class="pill">AI-powered design tools</span>
+      <span class="pill">Visual concept generation</span>
+      <span class="pill">Multimodal experiences</span>
+      <span class="pill">Interactive media &amp; storytelling</span>
+    </div>
+  </section>
+
+  <!-- ===================== STACK + LINKS ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab">Built With</span></div>
+    <div class="stack" style="margin-bottom:34px">
+      <span><b>FastAPI</b></span><span class="sep">/</span>
+      <span><b>Next.js 15</b></span><span class="sep">/</span>
+      <span><b>three.js</b></span><span class="sep">/</span>
+      <span><b>Gemini 3 Pro Image</b> · Qwen</span><span class="sep">/</span>
+      <span><b>Qwen wanx2.1-imageedit</b></span><span class="sep">/</span>
+      <span><b>IBM Granite 4-h-small</b> (watsonx)</span><span class="sep">/</span>
+      <span><b>HyperFrames</b></span><span class="sep">/</span>
+      <span><b>IBM Bob</b></span>
+    </div>
+    <div class="dim" style="margin-bottom:26px"><span class="lab">Review the Build</span></div>
+    <div class="cta">
+      <a class="btn primary" href="#" target="_blank" rel="noopener">▶ Watch the 3-min demo</a>
+      <a class="btn ghost" href="https://github.com/Dhrumil59/ArchiDream" target="_blank" rel="noopener">◆ GitHub repository</a>
+    </div>
+    <p class="todo">↳ One link left to fill — swap the demo-video URL once your ≤3-min video is uploaded.</p>
+  </section>
+
+  <!-- ===================== TITLE BLOCK ===================== -->
+  <footer>
+    <div class="titleblock">
+      <div class="tb"><div class="k">Project</div><div class="v gold">ArchiDream</div></div>
+      <div class="tb"><div class="k">Team</div><div class="v">Dhrumil Shah</div></div>
+      <div class="tb"><div class="k">Primary Tool</div><div class="v">IBM Bob</div></div>
+      <div class="tb"><div class="k">Sheet</div><div class="v">01 / 01</div></div>
+    </div>
+    <p class="foot-note">◆ Blueprint → dream home · AI Builders Challenge · Creative Industries</p>
+  </footer>
+
+</div>
+<script>
+(function(){
+  var ba=document.getElementById('ba'); if(!ba) return;
+  function set(x){
+    var r=ba.getBoundingClientRect();
+    var p=Math.max(3,Math.min(97,(x-r.left)/r.width*100));
+    ba.style.setProperty('--pos',p+'%');
+    ba.setAttribute('aria-valuenow',Math.round(p));
+  }
+  var drag=false;
+  ba.addEventListener('pointerdown',function(e){
+    drag=true; ba.style.animation='none';
+    try{ba.setPointerCapture(e.pointerId);}catch(_){}
+    set(e.clientX);
+  });
+  ba.addEventListener('pointermove',function(e){ if(drag) set(e.clientX); });
+  window.addEventListener('pointerup',function(){ drag=false; });
+  ba.addEventListener('keydown',function(e){
+    if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight') return;
+    e.preventDefault(); ba.style.animation='none';
+    var cur=parseFloat(getComputedStyle(ba).getPropertyValue('--pos'))||52;
+    var p=Math.max(3,Math.min(97,cur+(e.key==='ArrowRight'?4:-4)));
+    ba.style.setProperty('--pos',p+'%');
+    ba.setAttribute('aria-valuenow',Math.round(p));
+  });
+})();
+</script>
+</body>
+</html>

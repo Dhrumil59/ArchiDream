@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pillow
+ezdxf
+matplotlib
+numpy
+google-genai
+dashscope
+ibm-watsonx-ai
