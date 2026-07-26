@@ -9,6 +9,9 @@
 <meta property="og:title" content="ArchiDream - Blueprint → dream home">
 <meta property="og:description" content="DXF floor plan → styled top-down, 360° rooms, and an AI-directed tour film. Built with IBM Bob for the July Creative Industries challenge.">
 <meta property="og:type" content="website">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
 <style>
   /* ArchiDream - project submission sheet.
      Deliberate single dark theme: a blueprint is dark by nature. */
@@ -288,6 +291,26 @@
     .ba{animation:none;}
     .m360{animation:none;}
   }
+
+  /* ---- demos ---- */
+  .demo-cap{font-family:var(--font-mono);font-size:11.5px;letter-spacing:.08em;
+    color:var(--fog);margin:26px 0 12px;text-transform:uppercase;}
+  .demo-grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:640px){.demo-grid2{grid-template-columns:1fr;}}
+  .demo-grid2 figure{margin:0;}
+  .demo-grid2 img{width:100%;border:1px solid var(--line);border-radius:3px;display:block;}
+  .demo-grid2 figcaption{font-family:var(--font-mono);font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--blue);margin-top:8px;text-align:center;}
+  .pano-viewer{width:100%;aspect-ratio:2/1;border:1px solid var(--line);border-radius:3px;
+    overflow:hidden;background:var(--slate2);touch-action:none;cursor:grab;}
+  .pano-viewer canvas{display:block;}
+  .room-switch{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  .room-switch button{font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;
+    text-transform:uppercase;padding:8px 16px;border-radius:100px;cursor:pointer;
+    background:var(--slate2);border:1px solid var(--line);color:var(--fog);transition:all .2s;}
+  .room-switch button:hover{border-color:var(--blue-dim);color:var(--ivory);}
+  .room-switch button.on{background:var(--gold);color:#181203;border-color:var(--gold);font-weight:600;}
+  .demo-video{width:100%;border:1px solid var(--line);border-radius:3px;margin-top:4px;background:#000;}
 </style>
 </head>
 <body>
@@ -379,6 +402,30 @@
         inpaints only that region. The rest of the image stays untouched.</p>
       </div>
     </div>
+  </section>
+
+  <!-- ===================== DEMOS ===================== -->
+  <section class="frame" style="margin-top:22px">
+    <div class="dim"><span class="lab">Live demos</span></div>
+    <div class="sechead"><h2>See it on a real plan: the Sample House.</h2></div>
+
+    <p class="demo-cap">One floor plan, restyled - same geometry, different soul</p>
+    <div class="demo-grid2">
+      <figure><img src="assets/demo-scandi.jpg" alt="Sample House styled Scandinavian"><figcaption>Scandinavian</figcaption></figure>
+      <figure><img src="assets/demo-japandi.jpg" alt="Sample House styled Japandi"><figcaption>Japandi</figcaption></figure>
+    </div>
+
+    <p class="demo-cap">Step inside - drag to look around, scroll to zoom</p>
+    <div id="pano-viewer" class="pano-viewer"></div>
+    <div class="room-switch">
+      <button data-pano="assets/pano-kitchen.jpg" class="on">Kitchen &middot; Living</button>
+      <button data-pano="assets/pano-bed1.jpg">Bedroom</button>
+      <button data-pano="assets/pano-bed2.jpg">Bedroom 2</button>
+      <button data-pano="assets/pano-bath.jpg">Bathroom</button>
+    </div>
+
+    <p class="demo-cap">The auto-directed marketing tour - IBM Granite picks the shots</p>
+    <video class="demo-video" src="assets/demo-tour.mp4" controls preload="metadata" playsinline></video>
   </section>
 
   <!-- ===================== ARCHITECTURE ===================== -->
@@ -511,6 +558,35 @@
     ba.setAttribute('aria-valuenow',Math.round(p));
   });
 })();
+</script>
+<script type="module">
+  import * as THREE from "three";
+  const mount = document.getElementById("pano-viewer");
+  if (mount) {
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    mount.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, 2, 0.1, 100);
+    const geo = new THREE.SphereGeometry(50, 64, 48); geo.scale(-1, 1, 1);
+    const mat = new THREE.MeshBasicMaterial();
+    scene.add(new THREE.Mesh(geo, mat));
+    const loader = new THREE.TextureLoader();
+    const load = (url) => { const t = loader.load(url); t.colorSpace = THREE.SRGBColorSpace; mat.map = t; mat.needsUpdate = true; };
+    load("assets/pano-kitchen.jpg");
+    let lon = 0, lat = 0, down = null, last = 0;
+    const resize = () => { const w = mount.clientWidth, h = mount.clientHeight; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+    mount.addEventListener("pointerdown", (e) => { down = { x: e.clientX, y: e.clientY, lon, lat }; mount.style.cursor = "grabbing"; });
+    window.addEventListener("pointermove", (e) => { if (!down) return; lon = down.lon - (e.clientX - down.x) * 0.18; lat = Math.max(-85, Math.min(85, down.lat + (e.clientY - down.y) * 0.18)); last = performance.now(); });
+    window.addEventListener("pointerup", () => { down = null; mount.style.cursor = "grab"; });
+    mount.addEventListener("wheel", (e) => { e.preventDefault(); camera.fov = Math.max(35, Math.min(95, camera.fov + e.deltaY * 0.04)); camera.updateProjectionMatrix(); }, { passive: false });
+    window.addEventListener("resize", resize); resize();
+    (function loop() { requestAnimationFrame(loop); if (!down && performance.now() - last > 3000) lon += 0.03; const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon); camera.lookAt(Math.sin(phi) * Math.cos(th), Math.cos(phi), Math.sin(phi) * Math.sin(th)); renderer.render(scene, camera); })();
+    document.querySelectorAll(".room-switch button").forEach((b) => b.addEventListener("click", () => {
+      document.querySelectorAll(".room-switch button").forEach((x) => x.classList.remove("on"));
+      b.classList.add("on"); load(b.dataset.pano);
+    }));
+  }
 </script>
 </body>
 </html>

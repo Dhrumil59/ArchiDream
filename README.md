@@ -72,6 +72,28 @@ the geometry beautiful.
 
 ---
 
+## 🎬 Demos
+
+Everything below runs on the **Sample House**. The **[live project page](https://dhrumil59.github.io/ArchiDream/)** has the fully interactive versions (drag-to-look 360 + video player).
+
+**One plan, restyled** - same geometry, different soul:
+
+| Scandinavian | Japandi |
+| :---: | :---: |
+| ![Scandinavian top-down](docs/assets/demo-scandi.jpg) | ![Japandi top-down](docs/assets/demo-japandi.jpg) |
+
+**Step inside** - the open-plan kitchen / living, Scandinavian. Pan preview below; the [live page](https://dhrumil59.github.io/ArchiDream/) has the real drag-to-look 360:
+
+[![360 room preview](docs/assets/pano-kitchen.gif)](https://dhrumil59.github.io/ArchiDream/)
+
+**The auto-directed marketing tour** - IBM Granite plans the shots:
+
+<video src="https://github.com/Dhrumil59/ArchiDream/raw/main/docs/assets/demo-tour.mp4" controls></video>
+
+(If the player does not load, [download the tour video](docs/assets/demo-tour.mp4).)
+
+---
+
 ## 🧠 AI approach & architecture
 
 The guiding principle throughout: **geometry is ground truth, AI is the creative skin -
