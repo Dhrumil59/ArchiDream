@@ -5,9 +5,9 @@ get a photoreal stylized top-down view with clickable rooms, step inside any roo
 in 360°, and generate a marketing tour video, all grounded in the drawing's real
 geometry, so nothing drifts from the actual plan.
 
-**▶ [Watch the 3-minute demo](REPLACE_WITH_YOUTUBE_LINK)** &nbsp;·&nbsp; **[Live project page ↗](https://dhrumil59.github.io/ArchiDream/)**
+**▶ [Watch the 3-minute demo](https://youtu.be/-Q8_XhdwTCs)** &nbsp;·&nbsp; **[Live project page ↗](https://dhrumil59.github.io/ArchiDream/)**
 
-[![Watch the ArchiDream demo](docs/assets/hero-dream.jpg)](REPLACE_WITH_YOUTUBE_LINK)
+[![Watch the ArchiDream demo](docs/assets/hero-dream.jpg)](https://youtu.be/-Q8_XhdwTCs)
 
 ---
 
