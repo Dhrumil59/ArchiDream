@@ -3,6 +3,7 @@
 Run:  uvicorn app:app --port 8000  (from ArchiDream/backend, venv active)
 """
 
+import asyncio
 import glob
 import os
 import subprocess
@@ -109,11 +110,21 @@ def one_project(pid: str):
 async def upload(file: UploadFile):
     if not (file.filename or "").lower().endswith(".dxf"):
         raise HTTPException(400, "please upload a .dxf file")
+    data = await file.read()
+    print(f"[upload] file={file.filename!r}  received={len(data)/1048576:.1f}MB",
+          flush=True)
     with tempfile.NamedTemporaryFile(suffix=".dxf", delete=False) as tmp:
-        tmp.write(await file.read())
+        tmp.write(data)
         tmp_path = tmp.name
     try:
-        return projects.create_project(tmp_path, original_name=file.filename)
+        # create_project runs the extraction engine as a blocking subprocess
+        # (several seconds). Off-load it to a worker thread so the single
+        # event loop stays free to answer the frontend's concurrent polls
+        # (GET /api/projects, /api/styles, /api/models) — otherwise those
+        # requests hang and the Next proxy resets them (ECONNRESET ->
+        # "Internal Server Error").
+        return await asyncio.to_thread(
+            projects.create_project, tmp_path, original_name=file.filename)
     except Exception as exc:
         raise HTTPException(500, f"processing failed: {exc}")
     finally:

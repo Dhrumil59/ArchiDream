@@ -89,9 +89,17 @@ def render_plan(dxf_path, out_png, out_transform, window=None):
 
     from PIL import Image
     with Image.open(out_png) as check:
-        if check.size != (width_px, height_px):
-            raise RuntimeError(f"render size {check.size} != expected "
-                               f"{(width_px, height_px)}")
+        got_w, got_h = check.size
+    # matplotlib rounds inches*dpi, so the file can land a pixel off the
+    # requested size. The axes fill the figure and aspect is 'auto', so the
+    # window maps edge-to-edge onto whatever was actually written — take the
+    # real size as the transform and the mapping stays exact. Anything beyond
+    # rounding means the figure was resized under us and the transform would
+    # be garbage, so still fail loudly.
+    if abs(got_w - width_px) > 2 or abs(got_h - height_px) > 2:
+        raise RuntimeError(f"render size {(got_w, got_h)} != expected "
+                           f"{(width_px, height_px)}")
+    width_px, height_px = got_w, got_h
 
     transform = {
         "width_px": width_px, "height_px": height_px,

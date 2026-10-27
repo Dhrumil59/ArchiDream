@@ -378,8 +378,17 @@ def serialize_blocks(doc):
 
 DOOR_BLOCK_KW = ("PUERTA", "DOOR", "TUR", "PORTE")
 WINDOW_BLOCK_KW = ("VENTANA", "WINDOW", "VI-", "FENSTER", "FENETRE")
+# NOTE: matching doors by LAYER name as well was tried and reverted — on sets
+# with anonymised blocks it seals frames and hardware, not just the doorway,
+# and costs more rooms than it recovers. Anonymous door blocks are handled by
+# _gap_barriers instead.
 WALL_THICKNESS_M = (0.05, 0.45)   # plausible wall thickness range
 OPENING_WIDTH_M = (0.45, 3.5)     # plausible door/window opening widths
+# How wide a hole the stranded-room rescue is willing to treat as a hole.
+# A gap wider than this is open space, not a hole. Raising it to 5.0 was tried
+# for a 4.3 m undrawn terrace opening and changed nothing — the region escapes
+# by several routes at once, so widening the ceiling only finds more ways out.
+LEAK_SEAL_MAX_W_M = 3.0
 DEFAULT_WALL_HEIGHT_M = 2.7
 
 
@@ -535,22 +544,94 @@ def _wall_candidates(model_ents, floor_bbox, wall_layers):
     return primary, secondary
 
 
-def _pair_walls(segs, to_m):
-    """Pair parallel line segments into walls with thickness.
-    Returns wall runs: dict(direction, normal, offset, thickness, intervals)."""
+def _oriented_box(pts):
+    """Minimum-area oriented bounding box of a closed path.
+    Returns (short_side, long_side, u, v, u_range, v_mid) where u is the unit
+    vector along the long side. Rotating calipers over the edge directions —
+    the minimum-area box always shares an edge with the hull, and boundary
+    paths here are already near-convex bands."""
+    best = None
+    for i in range(len(pts) - 1):
+        dx, dy = pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]
+        L = math.hypot(dx, dy)
+        if L < 1e-9:
+            continue
+        ux, uy = dx / L, dy / L
+        us = [p[0] * ux + p[1] * uy for p in pts]
+        vs = [-p[0] * uy + p[1] * ux for p in pts]
+        w, h = max(vs) - min(vs), max(us) - min(us)
+        if best is None or w * h < best[0]:
+            best = (w * h, (ux, uy), (-uy, ux), min(us), max(us),
+                    min(vs), max(vs))
+    if best is None:
+        return None
+    _, u, v, u0, u1, v0, v1 = best
+    across, along = v1 - v0, u1 - u0
+    if along < across:   # long side runs across: swap roles
+        u, v = v, u
+        u0, u1, v0, v1 = v0, v1, u0, u1
+        across, along = along, across
+    return across, along, u, v, (u0, u1), (v0, v1)
+
+
+def _hatch_wall_faces(model_ents, to_m):
+    """Wall faces recovered from poche: solid/pattern HATCH bands.
+
+    Architectural sets routinely draw walls as a filled band (poche) rather
+    than as two drawn faces — the fill IS the wall, and its boundary path
+    carries no LINE geometry at all, so wall detection never sees it. This
+    turns every hatch boundary path shaped like a wall (a band whose width
+    falls in the plausible wall-thickness range, elongated, and long enough
+    to be structural) back into its two long edges.
+
+    Emitting faces rather than finished runs is deliberate: they flow through
+    the same pairing, extension, opening-detection and gap-sealing as drawn
+    linework, so a poche wall behaves exactly like a drawn one. Material and
+    furniture fills also produce bands, so the caller keeps these only when
+    they enclose more area."""
     min_t, max_t = WALL_THICKNESS_M[0] / to_m, WALL_THICKNESS_M[1] / to_m
-    min_overlap = 0.25 / to_m
+    min_len = 0.6 / to_m
+    faces = []
+    for e in model_ents:
+        if e["type"] != "HATCH":
+            continue
+        for b in (e.get("boundaries") or []):
+            pts = b.get("points") or []
+            if len(pts) < 3:
+                continue
+            box = _oriented_box(pts)
+            if not box:
+                continue
+            across, along, u, v, (u0, u1), (v0, v1) = box
+            if not (min_t <= across <= max_t and along >= min_len):
+                continue
+            if along < 2.5 * across:      # a blob, not a band
+                continue
+            for off in (v0, v1):
+                faces.append((
+                    (u[0] * u0 + v[0] * off, u[1] * u0 + v[1] * off),
+                    (u[0] * u1 + v[0] * off, u[1] * u1 + v[1] * off),
+                ))
+    return faces
+
+
+def _parallel_groups(segs, min_len):
+    """Group segments into parallel families, projected onto a shared axis.
+
+    Yields (d, n, projected) where `projected` is the family's segments as
+    (offset along n, lo, hi along d), sorted by offset. Shared by wall pairing
+    and single-line wall detection so both see identical geometry."""
     ANG_TOL = 1.0  # degrees: segments within this are considered parallel
 
     items = []  # (angle 0..180, x1, y1, x2, y2)
     for (x1, y1), (x2, y2) in segs:
         ln = math.hypot(x2 - x1, y2 - y1)
-        if ln < min_overlap:
+        if ln < min_len:
             continue
         items.append((math.degrees(math.atan2(y2 - y1, x2 - x1)) % 180.0,
                       x1, y1, x2, y2))
     if not items:
-        return []
+        return
 
     # cluster by angle (single-link on the sorted list, with 0/180 wraparound)
     items.sort()
@@ -563,7 +644,6 @@ def _pair_walls(segs, to_m):
     if len(clusters) > 1 and (180.0 - clusters[-1][-1][0]) + clusters[0][0][0] <= ANG_TOL:
         clusters[0] = clusters.pop() + clusters[0]
 
-    pieces = []  # (d, n, mid_offset, thickness, t_lo, t_hi)
     for cl in clusters:
         # one shared direction per cluster so offsets are comparable even
         # when individual segments deviate by fractions of a degree
@@ -580,21 +660,14 @@ def _pair_walls(segs, to_m):
             t1, t2 = x1 * d[0] + y1 * d[1], x2 * d[0] + y2 * d[1]
             projected.append((off, min(t1, t2), max(t1, t2)))
         projected.sort()
-        for i, (off1, a1, b1) in enumerate(projected):
-            for off2, a2, b2 in projected[i + 1:]:
-                t = off2 - off1
-                if t > max_t:
-                    break
-                if t < min_t:
-                    continue
-                lo, hi = max(a1, a2), min(b1, b2)
-                if hi - lo >= min_overlap:
-                    pieces.append((d, n, off1 + t / 2, t, lo, hi))
+        yield d, n, projected
 
-    # group pieces into wall runs: same direction and nearly the same
-    # centerline offset and thickness -> union of intervals along the wall.
-    # Single-link merge (no fixed buckets: pieces of one wall must not split
-    # across a rounding boundary).
+
+def _group_pieces(pieces, to_m):
+    """Group wall pieces into runs: same direction and nearly the same
+    centerline offset and thickness -> union of intervals along the wall.
+    Single-link merge (no fixed buckets: pieces of one wall must not split
+    across a rounding boundary)."""
     tol = 0.04 / to_m
     runs = []
     for d, n, mid, t, lo, hi in sorted(pieces, key=lambda p: (p[0], p[2])):
@@ -620,6 +693,93 @@ def _pair_walls(segs, to_m):
                 merged.append([lo, hi])
         r["intervals"] = merged
     return runs
+
+
+def _pair_walls(segs, to_m):
+    """Pair parallel line segments into walls with thickness.
+    Returns wall runs: dict(direction, normal, offset, thickness, intervals)."""
+    min_t, max_t = WALL_THICKNESS_M[0] / to_m, WALL_THICKNESS_M[1] / to_m
+    min_overlap = 0.25 / to_m
+
+    pieces = []  # (d, n, mid_offset, thickness, t_lo, t_hi)
+    for d, n, projected in _parallel_groups(segs, min_overlap):
+        for i, (off1, a1, b1) in enumerate(projected):
+            for off2, a2, b2 in projected[i + 1:]:
+                t = off2 - off1
+                if t > max_t:
+                    break
+                if t < min_t:
+                    continue
+                lo, hi = max(a1, a2), min(b1, b2)
+                if hi - lo >= min_overlap:
+                    pieces.append((d, n, off1 + t / 2, t, lo, hi))
+
+    return _group_pieces(pieces, to_m)
+
+
+def _run_spans_along(d, n, off, runs, tol):
+    """Extents of existing runs that lie along this line, projected onto it.
+
+    Compared geometrically (not by identity of the direction tuple) because
+    runs come from their own angle clustering and may carry a fractionally
+    different d. Each run contributes its FULL extent, gaps included, so a
+    doorway inside a run stays 'covered' and never gets walled shut."""
+    spans = []
+    for r in runs:
+        rd, rn, rmid = r["d"], r["n"], r["mid"]
+        if abs(rd[0] * n[0] + rd[1] * n[1]) > 0.02:   # not parallel to us
+            continue
+        rlo, rhi = r["intervals"][0][0], r["intervals"][-1][1]
+        ax = rd[0] * rlo + rn[0] * rmid
+        ay = rd[1] * rlo + rn[1] * rmid
+        bx = rd[0] * rhi + rn[0] * rmid
+        by = rd[1] * rhi + rn[1] * rmid
+        if abs((ax * n[0] + ay * n[1]) - off) > tol:  # different offset
+            continue
+        s1, s2 = ax * d[0] + ay * d[1], bx * d[0] + by * d[1]
+        spans.append((min(s1, s2), max(s1, s2)))
+    return spans
+
+
+def _single_line_runs(segs, runs, to_m):
+    """Wall runs for wall-layer linework drawn as a SINGLE line.
+
+    _pair_walls needs two parallel faces. Production architectural sets
+    routinely mix conventions: interior partitions drawn double-line (two
+    faces a stud-width apart) while the outer envelope — or a party wall, or
+    a glazed facade — is drawn as one line, the line itself being the wall.
+    Those segments pair with nothing, so the envelope never enters the wall
+    network and the partition floods straight out of every room touching it.
+
+    We work per interval rather than per segment: a long envelope line often
+    pairs with something over a short stretch (a partition butting into it),
+    and rejecting the whole line for that would leave most of the envelope
+    missing. So we subtract the stretches an existing run already carries and
+    promote whatever remains, if it is long enough to be structural.
+
+    Thickness is the median of the paired walls in the same drawing, so the
+    sealed line matches the file's own drafting scale. The caller keeps the
+    result only when it encloses more area, so fully double-line plans are
+    left untouched."""
+    max_t = WALL_THICKNESS_M[1] / to_m
+    # structural, not a jamb/return/detail tick
+    min_len = 0.8 / to_m
+
+    # give a bare line the thickness this drawing uses for its real walls
+    t_nom = 0.10 / to_m
+    if runs:
+        ts = sorted(r["t"] for r in runs)
+        t_nom = ts[len(ts) // 2]
+
+    pieces = []
+    for d, n, projected in _parallel_groups(segs, min_len):
+        for off, lo, hi in projected:
+            blocked = _run_spans_along(d, n, off, runs, max_t)
+            for a, b in _clip_intervals([lo, hi], blocked):
+                if b - a >= min_len:
+                    pieces.append((d, n, off, t_nom, a, b))
+
+    return _group_pieces(pieces, to_m)
 
 
 def _clip_intervals(iv, blocked):
@@ -797,6 +957,95 @@ def _supplement_perimeter_runs(runs, secondary, floor_bbox, to_m):
     try_pair_segs(v_segs, "v", 0.30)
 
     return runs
+
+
+def _seal_perimeter_gaps(runs, secondary, to_m):
+    """Close an open side of the built perimeter with a SINGLE boundary line.
+
+    _pair_walls and _supplement_perimeter_runs both need two parallel faces
+    (within wall thickness) to form a wall. Some plans draw one enclosing
+    side as a single line — a glazed or open facade whose only linework is
+    the plot-boundary edge, often on layer '0'. With that side absent from
+    the network the space partition floods straight out through it and the
+    whole interior collapses to 'exterior' (the One-story-house lesson:
+    kitchen/dining/living/family all leak, only the fully-walled corner
+    survives).
+
+    We take the axis-aligned bbox of the EXISTING runs — the footprint built
+    from trusted walls, NOT the padded floor region — so we never seal in a
+    garden or yard beyond the house. For any of the four sides not already
+    carried by a run, we look for a long axis-aligned secondary segment lying
+    along that side; if one spans most of it, we add it as a thin sealing run.
+    A single line is enough to seal the flood without being a paired wall."""
+    if not secondary or not runs:
+        return runs
+
+    # World extent of every run + per-side coverage spans (from world
+    # endpoints, so the sign of n is irrelevant at this pre-normalize stage).
+    xs, ys, h_runs, v_runs = [], [], [], []
+    for r in runs:
+        d, n, mid = r["d"], r["n"], r["mid"]
+        lo, hi = r["intervals"][0][0], r["intervals"][-1][1]
+        ax, ay = d[0] * lo + n[0] * mid, d[1] * lo + n[1] * mid
+        bx, by = d[0] * hi + n[0] * mid, d[1] * hi + n[1] * mid
+        xs += [ax, bx]; ys += [ay, by]
+        if abs(d[0]) > 0.9:      # horizontal run
+            h_runs.append(((ay + by) / 2, min(ax, bx), max(ax, bx)))
+        elif abs(d[1]) > 0.9:    # vertical run
+            v_runs.append(((ax + bx) / 2, min(ay, by), max(ay, by)))
+    if not xs:
+        return runs
+    xmin, xmax, ymin, ymax = min(xs), max(xs), min(ys), max(ys)
+    tol = max(WALL_THICKNESS_M[1] / to_m, 0.35 / to_m)
+    min_len = 2.0 / to_m
+
+    # Long axis-aligned secondary segments (any untrusted layer, incl. '0').
+    h_segs, v_segs = [], []
+    for (x1, y1), (x2, y2) in secondary:
+        ln = math.hypot(x2 - x1, y2 - y1)
+        if ln < min_len:
+            continue
+        if abs(y2 - y1) / ln < 0.05:
+            h_segs.append(((y1 + y2) / 2, min(x1, x2), max(x1, x2)))
+        elif abs(x2 - x1) / ln < 0.05:
+            v_segs.append(((x1 + x2) / 2, min(y1, y2), max(y1, y2)))
+
+    def covered(spans, offset, lo, hi):
+        total = 0.0
+        for off, a, b in spans:
+            if abs(off - offset) <= tol:
+                total += max(0.0, min(hi, b) - max(lo, a))
+        return total >= 0.6 * (hi - lo)
+
+    def best_seg(segs, offset, lo, hi):
+        pick, best_ov = None, 0.6 * (hi - lo)
+        for off, a, b in segs:
+            if abs(off - offset) > tol:
+                continue
+            ov = min(hi, b) - max(lo, a)
+            if ov > best_ov:
+                best_ov, pick = ov, (off, max(lo, a), min(hi, b))
+        return pick
+
+    seal_t = 0.12 / to_m
+    new = []
+    for offset in (xmin, xmax):          # vertical sides (east / west)
+        if covered(v_runs, offset, ymin, ymax):
+            continue
+        seg = best_seg(v_segs, offset, ymin, ymax)
+        if seg:
+            off, lo, hi = seg
+            new.append({"d": (0.0, 1.0), "n": (1.0, 0.0), "mid": off,
+                        "t": seal_t, "intervals": [[lo, hi]]})
+    for offset in (ymin, ymax):          # horizontal sides (north / south)
+        if covered(h_runs, offset, xmin, xmax):
+            continue
+        seg = best_seg(h_segs, offset, xmin, xmax)
+        if seg:
+            off, lo, hi = seg
+            new.append({"d": (1.0, 0.0), "n": (0.0, 1.0), "mid": off,
+                        "t": seal_t, "intervals": [[lo, hi]]})
+    return runs + new
 
 
 def _normalize_run(r):
@@ -1215,6 +1464,9 @@ def _door_barriers(model_ents, blocks, floor_bbox, to_m, cache, runs):
                 if near_wall(p[0], p[1]):
                     barriers.append(((cx, cy), tuple(p)))
         elif e["type"] == "INSERT":
+            # Block NAME only, deliberately: a door layer also carries frames,
+            # thresholds and hardware whose hulls would seal far more than the
+            # doorway. Anonymous door blocks are recovered by _gap_barriers.
             if not any(k in e["block"].upper() for k in DOOR_BLOCK_KW):
                 continue
             T = e.get("transform")
@@ -1297,6 +1549,7 @@ def _partition(runs, floor_bbox, to_m, barriers=()):
     area into exterior + interior connected components (the spaces).
     `barriers` are extra thin segments (doorways) to seal; components below
     room size merge into their largest reachable neighbor."""
+    # (see _outdoor_components for why the biggest component is not always a room)
     xmin, ymin, xmax, ymax = floor_bbox
     span = max(xmax - xmin, ymax - ymin)
     cell = max(span / 800.0, 0.02 / to_m)
@@ -1692,7 +1945,7 @@ def _leak_points(start_ix, start_iy, exterior, wallgrid, gx, gy, cell):
     path.reverse()  # room -> border
 
     # pinch detection: corridor width perpendicular to travel direction
-    MAXW = int(3.0 / cell)  # a gap wider than 3 m is open space, not a hole
+    MAXW = int(LEAK_SEAL_MAX_W_M / cell)
     pinches = []
     step = max(1, len(path) // 400)
     for i in range(3, len(path) - 3, step):
@@ -1730,6 +1983,143 @@ def _leak_points(start_ix, start_iy, exterior, wallgrid, gx, gy, cell):
     return out[:3]
 
 
+def _outdoor_components(labels, meta):
+    """Component ids that are the OUTDOORS wrapped in, not rooms.
+
+    Once the wall network is complete enough, a site boundary, a plot fence
+    or the drawing's own sheet border can close the region *around* the
+    building. The flood then reports the yard as an ordinary enclosed
+    component — and because it is usually the largest thing on the sheet it
+    would both dominate the room list and, worse, make 'encloses the most
+    area' pick the strategy that produced it.
+
+    The test is containment plus shape, and both halves are needed:
+
+      - it swallows two or more other components whole. Rooms never nest:
+        two rooms' boxes may overlap, but one room does not contain two
+        other rooms outright. This alone would still catch an open-plan
+        floor wrapped around a service core, hence the second half.
+      - it is shaped like surroundings rather than like a room: either it
+        spans most of the plan in both directions (the yard around a
+        building), or it fills only a small fraction of its own bounding box
+        (the sliver network left between unclosed wall stubs). A real room,
+        even an L- or U-shaped one, is a compact solid that does not span
+        the whole sheet.
+
+    Note a label inside is NOT taken as proof it is a room: on messy plans a
+    room name routinely lands in the leftover region, and reporting that
+    label as stranded is far better than publishing a 143 m² 'bathroom'."""
+    _gx, _gy, _cell, n_comp = meta
+    if n_comp < 3:
+        return set()
+    ny, nx = labels.shape
+    boxes, fill = {}, {}
+    for cid in range(1, n_comp + 1):
+        rows, cols = np.nonzero(labels == cid)
+        if not rows.size:
+            continue
+        x0, y0 = int(cols.min()), int(rows.min())
+        x1, y1 = int(cols.max()), int(rows.max())
+        boxes[cid] = (x0, y0, x1, y1)
+        area = max(1, (x1 - x0 + 1) * (y1 - y0 + 1))
+        fill[cid] = rows.size / area
+
+    out = set()
+    for cid, (x0, y0, x1, y1) in boxes.items():
+        spans = (x1 - x0) >= 0.7 * nx and (y1 - y0) >= 0.7 * ny
+        sliver = fill[cid] < 0.35
+        if not (spans or sliver):
+            continue
+        contained = sum(1 for o, (a0, b0, a1, b1) in boxes.items()
+                        if o != cid and a0 > x0 and b0 > y0
+                        and a1 < x1 and b1 < y1)
+        if contained >= 2:
+            out.add(cid)
+    return out
+
+
+def _leak_seals(start_ix, start_iy, exterior, wallgrid, gx, gy, cell):
+    """Barrier segments (drawing units) that close the pinch-point gaps a
+    leaked room's area uses to reach the exterior — the deterministic seal
+    the vision rescue would otherwise place by hand. Same BFS-to-border +
+    pinch analysis as _leak_points, but returns a wall-to-wall segment across
+    each gap instead of just the midpoint, ready to drop into the partition's
+    `barriers`. This is what lets an open-plan public zone behind a front door
+    (SALA/DINING/KITCHEN) get enclosed without any AI in the loop."""
+    from collections import deque
+
+    ny, nx = exterior.shape
+    if not (0 <= start_ix < nx and 0 <= start_iy < ny):
+        return []
+    if not exterior[start_iy, start_ix]:
+        found = False
+        for r in range(1, 25):
+            for dx2, dy2 in ((r, 0), (-r, 0), (0, r), (0, -r),
+                             (r, r), (-r, -r), (r, -r), (-r, r)):
+                ix2, iy2 = start_ix + dx2, start_iy + dy2
+                if 0 <= ix2 < nx and 0 <= iy2 < ny and exterior[iy2, ix2]:
+                    start_ix, start_iy, found = ix2, iy2, True
+                    break
+            if found:
+                break
+        if not found:
+            return []
+
+    parent = {}
+    q = deque([(start_ix, start_iy)])
+    seen = {(start_ix, start_iy)}
+    end = None
+    while q:
+        ix2, iy2 = q.popleft()
+        if ix2 in (0, nx - 1) or iy2 in (0, ny - 1):
+            end = (ix2, iy2)
+            break
+        for dx2, dy2 in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx2, ny2 = ix2 + dx2, iy2 + dy2
+            if (nx2, ny2) in seen or not (0 <= nx2 < nx and 0 <= ny2 < ny):
+                continue
+            if not exterior[ny2, nx2]:
+                continue
+            seen.add((nx2, ny2))
+            parent[(nx2, ny2)] = (ix2, iy2)
+            q.append((nx2, ny2))
+    if end is None:
+        return []
+    path = [end]
+    while path[-1] in parent:
+        path.append(parent[path[-1]])
+    path.reverse()  # room -> border
+
+    MAXW = int(LEAK_SEAL_MAX_W_M / cell)
+    segs, last = [], -99
+    step = max(1, len(path) // 400)
+    for i in range(3, len(path) - 3, step):
+        dx2 = path[i + 3][0] - path[i - 3][0]
+        dy2 = path[i + 3][1] - path[i - 3][1]
+        L = math.hypot(dx2, dy2) or 1
+        px, py = -dy2 / L, dx2 / L  # perpendicular to travel
+        w = [None, None]
+        for si, sgn in enumerate((1, -1)):
+            for k in range(1, MAXW):
+                jx = int(round(path[i][0] + sgn * px * k))
+                jy = int(round(path[i][1] + sgn * py * k))
+                if not (0 <= jx < nx and 0 <= jy < ny):
+                    break
+                if wallgrid[jy, jx]:
+                    w[si] = k
+                    break
+        # a real hole: walls on BOTH sides within corridor width -> seal it
+        if w[0] is not None and w[1] is not None and i - last > 8:
+            cx, cy = path[i]
+            x1 = gx + (cx + px * (w[0] + 3)) * cell
+            y1 = gy + (cy + py * (w[0] + 3)) * cell
+            x2 = gx + (cx - px * (w[1] + 3)) * cell
+            y2 = gy + (cy - py * (w[1] + 3)) * cell
+            segs.append(((x1, y1), (x2, y2)))
+            last = i
+    return segs[:3]
+
+
 def _is_overhead(e, layer_linetypes):
     lt = (e.get("linetype") or layer_linetypes.get(e["layer"], "") or "").upper()
     lyr = e["layer"].upper()
@@ -1755,47 +2145,121 @@ def build_semantic_model(model_ents, blocks, units, extents, layers_table,
     classify = lambda cx, cy, w: _classify_opening(cx, cy, w,
                                                    model_ents, to_m)[0]
     best = None
+    hatch_faces_all = _hatch_wall_faces(model_ents, to_m)
+    # room-name label positions: used both to tell the yard from a real room
+    # while scoring, and to auto-seal stranded rooms further down
+    room_texts = [(e["position"][0], e["position"][1]) for e in model_ents
+                  if e["type"] in ("TEXT", "MTEXT")
+                  and ROOM_NAME_HINT.search((e.get("text") or "").strip())]
     for wall_layers in (_wall_layer_strategies(model_ents) or [set()]):
         primary_all, _ = _wall_candidates(model_ents, huge, wall_layers)
         floor_bbox = _floor_region(primary_all, to_m) or fallback_bbox
-        primary, secondary = _wall_candidates(model_ents, floor_bbox,
-                                              wall_layers)
-        runs = _pair_walls(primary, to_m)
-        runs = _extend_runs(runs, secondary, to_m, classify)
-        runs = _supplement_perimeter_runs(runs, secondary, floor_bbox, to_m)
-        if hints.get("wall_segments"):
-            h_runs, h_bad = _hint_runs(hints, primary, secondary, to_m)
-            runs = runs + h_runs
-            hint_stats["applied"] = len(h_runs)
-            hint_stats["unsupported"] = h_bad
-        end_openings = _endpoint_openings(runs, model_ents, to_m)
-        barriers = [(e["p1"], e["p2"]) for e in end_openings]
-        barriers += _door_barriers(model_ents, blocks, floor_bbox, to_m,
-                                   block_cache, runs)
-        barriers += _micro_bridges(runs, to_m)
-        # doorway seals confirmed externally (atlas ops / vision voting):
-        # a barrier splits the spaces like a door swing does, without
-        # inventing a wall — drawing units, same as wall_segments hints
-        barriers += [(tuple(s["a"]), tuple(s["b"]))
-                     for s in hints.get("door_barriers", [])]
-        # Fallback: seal any remaining plausible-width gaps that door detection
-        # missed (anonymous block names, no swing arcs, etc.)
-        gap_b = _gap_barriers(runs, to_m)
-        gap_b_set = {(round(p1[0],3), round(p1[1],3),
-                      round(p2[0],3), round(p2[1],3))
-                     for p1, p2 in barriers}
-        barriers += [(p1, p2) for p1, p2 in gap_b
-                     if (round(p1[0],3), round(p1[1],3),
-                         round(p2[0],3), round(p2[1],3))
-                     not in gap_b_set]
-        labels, exterior, wallgrid, meta = \
-            _partition(runs, floor_bbox, to_m, barriers=barriers)
-        enclosed_m2 = float((labels > 0).sum()) * (meta[2] * to_m) ** 2
-        if best is None or enclosed_m2 > best["score"]:
-            best = {"score": enclosed_m2, "layers": wall_layers,
-                    "floor_bbox": floor_bbox, "runs": runs,
-                    "end_openings": end_openings, "labels": labels,
-                    "exterior": exterior, "wallgrid": wallgrid, "meta": meta}
+        primary_drawn, secondary = _wall_candidates(model_ents, floor_bbox,
+                                                    wall_layers)
+        hatch_faces = [((x1, y1), (x2, y2))
+                       for (x1, y1), (x2, y2) in hatch_faces_all
+                       if floor_bbox[0] <= (x1 + x2) / 2 <= floor_bbox[2]
+                       and floor_bbox[1] <= (y1 + y2) / 2 <= floor_bbox[3]]
+        # Two more axes of the same self-validation: whether poche hatch bands
+        # count as wall faces, and whether unpaired wall-layer linework is
+        # promoted to single-line walls. Files that draw every wall as a
+        # double line score identically on all of them and keep the plain
+        # pass; files that draw their envelope as poche or as one line only
+        # enclose their rooms once that source is included.
+        for use_hatch in ((False, True) if hatch_faces else (False,)):
+            primary = primary_drawn + (hatch_faces if use_hatch else [])
+            for use_singles in (False, True):
+                runs = _pair_walls(primary, to_m)
+                if use_singles:
+                    extra = _single_line_runs(primary, runs, to_m)
+                    if not extra:
+                        continue  # identical to the pass already scored
+                    runs = runs + extra
+                runs = _extend_runs(runs, secondary, to_m, classify)
+                runs = _supplement_perimeter_runs(runs, secondary, floor_bbox,
+                                                  to_m)
+                runs = _seal_perimeter_gaps(runs, secondary, to_m)
+                if hints.get("wall_segments"):
+                    h_runs, h_bad = _hint_runs(hints, primary, secondary, to_m)
+                    runs = runs + h_runs
+                    hint_stats["applied"] = len(h_runs)
+                    hint_stats["unsupported"] = h_bad
+                end_openings = _endpoint_openings(runs, model_ents, to_m)
+                barriers = [(e["p1"], e["p2"]) for e in end_openings]
+                barriers += _door_barriers(model_ents, blocks, floor_bbox,
+                                           to_m, block_cache, runs)
+                barriers += _micro_bridges(runs, to_m)
+                # doorway seals confirmed externally (atlas ops / vision
+                # voting): a barrier splits the spaces like a door swing does,
+                # without inventing a wall — drawing units, as wall_segments
+                barriers += [(tuple(s["a"]), tuple(s["b"]))
+                             for s in hints.get("door_barriers", [])]
+                # Fallback: seal any remaining plausible-width gaps that door
+                # detection missed (anonymous blocks, no swing arcs, etc.)
+                gap_b = _gap_barriers(runs, to_m)
+                gap_b_set = {(round(p1[0],3), round(p1[1],3),
+                              round(p2[0],3), round(p2[1],3))
+                             for p1, p2 in barriers}
+                barriers += [(p1, p2) for p1, p2 in gap_b
+                             if (round(p1[0],3), round(p1[1],3),
+                                 round(p2[0],3), round(p2[1],3))
+                             not in gap_b_set]
+                labels, exterior, wallgrid, meta = \
+                    _partition(runs, floor_bbox, to_m, barriers=barriers)
+                # score on ROOM area only: sealing the yard or the sheet
+                # border encloses a lot of area without finding any room, and
+                # must not be able to win the comparison
+                scored = labels > 0
+                for cid in _outdoor_components(labels, meta):
+                    scored &= labels != cid
+                enclosed_m2 = float(scored.sum()) * (meta[2] * to_m) ** 2
+                if best is None or enclosed_m2 > best["score"]:
+                    best = {"score": enclosed_m2, "layers": wall_layers,
+                            "floor_bbox": floor_bbox, "runs": runs,
+                            "end_openings": end_openings, "labels": labels,
+                            "exterior": exterior, "wallgrid": wallgrid,
+                            "meta": meta, "barriers": barriers,
+                            "single_line_walls": use_singles,
+                            "hatch_walls": use_hatch}
+
+    # ── auto-seal labeled leaks ──────────────────────────────────────────
+    # A room whose NAME text is stranded in the exterior flood is a room the
+    # partition lost through an unsealed gap (open-plan public zones behind a
+    # front door, or a perimeter drawn with gaps). Deterministically seal the
+    # pinch points its area uses to escape — the same gaps the vision rescue
+    # would close — and re-partition. Only fires when a ROOM_NAME label is
+    # actually stranded, so plans that already resolve cleanly are untouched;
+    # kept only if it encloses strictly more area than before.
+    def _room_cells(labels_x, meta_x):
+        """Enclosed cells that are actually rooms — the outdoors, if a seal
+        happened to wrap it, must not count as progress."""
+        m = labels_x > 0
+        for cid in _outdoor_components(labels_x, meta_x):
+            m &= labels_x != cid
+        return float(m.sum())
+
+    if room_texts:
+        runs_b, fb_b = best["runs"], best["floor_bbox"]
+        base_area = _room_cells(best["labels"], best["meta"])
+        barriers_cur = list(best["barriers"])
+        cur = {k: best[k] for k in ("labels", "exterior", "wallgrid", "meta")}
+        for _ in range(5):
+            labels_c, ext_c, wall_c, meta_c = (cur["labels"], cur["exterior"],
+                                               cur["wallgrid"], cur["meta"])
+            gxb, gyb, cellb = meta_c[0], meta_c[1], meta_c[2]
+            nyb, nxb = labels_c.shape
+            seals = []
+            for lx, ly in room_texts:
+                ix, iy = int((lx - gxb) / cellb), int((ly - gyb) / cellb)
+                if 0 <= ix < nxb and 0 <= iy < nyb and ext_c[iy, ix]:
+                    seals += _leak_seals(ix, iy, ext_c, wall_c, gxb, gyb, cellb)
+            if not seals:
+                break
+            barriers_cur = barriers_cur + seals
+            l2, e2, w2, m2 = _partition(runs_b, fb_b, to_m, barriers=barriers_cur)
+            cur = {"labels": l2, "exterior": e2, "wallgrid": w2, "meta": m2}
+        if _room_cells(cur["labels"], cur["meta"]) > base_area:
+            best.update(cur)
 
     floor_bbox = best["floor_bbox"]
     runs = _filter_stub_runs(_merge_runs(best["runs"], to_m), to_m)
@@ -1834,8 +2298,11 @@ def build_semantic_model(model_ents, blocks, units, extents, layers_table,
         return "wall"
 
     min_cells = MIN_ROOM_AREA_M2 / ((cell * to_m) ** 2)
+    outdoors = _outdoor_components(labels, best["meta"])
     spaces, comp_to_space, voids = [], {}, 0
     for cid in range(1, n_comp + 1):
+        if cid in outdoors:
+            continue          # the yard/site the flood got sealed into
         mask = labels == cid
         count = int(mask.count_nonzero()) if hasattr(mask, "count_nonzero") \
             else int(mask.sum())
